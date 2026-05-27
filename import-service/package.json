@@ -10,8 +10,10 @@
     "cdk": "cdk"
   },
   "devDependencies": {
+    "@types/aws-lambda": "^8.10.161",
     "@types/node": "^24.10.1",
     "aws-cdk": "2.1118.4",
+    "esbuild": "^0.28.0",
     "ts-node": "^10.9.2",
     "typescript": "~5.9.3"
   },
@@ -19,6 +21,7 @@
     "@aws-sdk/client-s3": "^3.1053.0",
     "@aws-sdk/s3-request-presigner": "^3.1053.0",
     "aws-cdk-lib": "^2.248.0",
-    "constructs": "^10.5.0"
+    "constructs": "^10.5.0",
+    "csv-parser": "^3.2.1"
   }
 }
