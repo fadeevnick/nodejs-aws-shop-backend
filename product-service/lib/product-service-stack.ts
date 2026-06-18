@@ -3,6 +3,8 @@ import { Construct } from 'constructs';
 import * as lambda from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as lambdaEventSources from 'aws-cdk-lib/aws-lambda-event-sources';
 
 export class ProductServiceStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -53,12 +55,33 @@ export class ProductServiceStack extends cdk.Stack {
       },
     });
 
+    const catalogBatchProcessFn = new lambda.NodejsFunction(this, 'CatalogBatchProcess', {
+      entry: 'src/lambda/catalogBatchProcess.ts',
+      handler: 'handler',
+      environment: {
+        PRODUCTS_TABLE_NAME: productsTable.tableName,
+        STOCKS_TABLE_NAME: stocksTable.tableName,
+      },
+    });
+
+    const catalogItemsQueue = new sqs.Queue(this, 'CatalogItemsQueue', {
+      queueName: 'catalogItemsQueue',
+    });
+
     productsTable.grantReadData(getProductsListFn);
     stocksTable.grantReadData(getProductsListFn);
     productsTable.grantReadData(getProductsByIdFn);
     stocksTable.grantReadData(getProductsByIdFn);
     productsTable.grantWriteData(createProductFn);
     stocksTable.grantWriteData(createProductFn);
+    productsTable.grantWriteData(catalogBatchProcessFn);
+    stocksTable.grantWriteData(catalogBatchProcessFn);
+
+    catalogBatchProcessFn.addEventSource(
+      new lambdaEventSources.SqsEventSource(catalogItemsQueue, {
+        batchSize: 5,
+      })
+    );
 
     const api = new apigateway.RestApi(this, 'ProductServiceApi', {
       restApiName: 'Product Service API',

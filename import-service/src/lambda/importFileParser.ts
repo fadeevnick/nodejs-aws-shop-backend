@@ -1,9 +1,12 @@
 import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { SendMessageCommand, SQSClient } from '@aws-sdk/client-sqs';
 import { S3Event } from 'aws-lambda';
 import csv from 'csv-parser';
 import { Readable } from 'node:stream';
 
 const s3Client = new S3Client({});
+const sqsClient = new SQSClient({});
+const catalogItemsQueueUrl = process.env.CATALOG_ITEMS_QUEUE_URL;
 
 export const handler = async (event: S3Event) => {
   for (const record of event.Records) {
@@ -25,14 +28,37 @@ export const handler = async (event: S3Event) => {
   }
 };
 
-function parseCsvStream(stream: Readable) {
-  return new Promise<void>((resolve, reject) => {
-    stream
-      .pipe(csv())
-      .on('data', (record) => {
-        console.log('CSV record', record);
+async function parseCsvStream(stream: Readable) {
+  if (!catalogItemsQueueUrl) {
+    throw new Error('CATALOG_ITEMS_QUEUE_URL is not configured');
+  }
+
+  const csvStream = stream.pipe(csv());
+
+  for await (const record of csvStream) {
+    const payload = mapCsvRecordToProduct(record as Record<string, string>);
+
+    await sqsClient.send(
+      new SendMessageCommand({
+        QueueUrl: catalogItemsQueueUrl,
+        MessageBody: JSON.stringify(payload),
       })
-      .on('error', reject)
-      .on('end', resolve);
-  });
+    );
+  }
+}
+
+function mapCsvRecordToProduct(record: Record<string, string>) {
+  const price = Number(record.price);
+  const count = Number(record.count);
+
+  if (!record.title || Number.isNaN(price) || Number.isNaN(count)) {
+    throw new Error(`Invalid CSV record: ${JSON.stringify(record)}`);
+  }
+
+  return {
+    title: record.title,
+    description: record.description ?? '',
+    price,
+    count,
+  };
 }

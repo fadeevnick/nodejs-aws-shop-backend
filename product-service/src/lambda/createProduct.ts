@@ -1,7 +1,4 @@
-import { randomUUID } from 'node:crypto';
-import { PutCommand } from '@aws-sdk/lib-dynamodb';
-import { PRODUCTS_TABLE_NAME, STOCKS_TABLE_NAME } from '../lib/constants';
-import { documentClient } from '../lib/dynamo';
+import { createProductRecord } from '../lib/product';
 
 export const handler = async (event: { body?: string | null }) => {
   if (!event.body) {
@@ -27,36 +24,12 @@ export const handler = async (event: { body?: string | null }) => {
     };
   }
 
-  const id = randomUUID();
-  const product = {
-    id,
+  const product = await createProductRecord({
     title: payload.title,
-    description: payload.description ?? '',
+    description: payload.description,
     price: payload.price,
     count: payload.count,
-  };
-
-  await documentClient.send(
-    new PutCommand({
-      TableName: PRODUCTS_TABLE_NAME,
-      Item: {
-        id: product.id,
-        title: product.title,
-        description: product.description,
-        price: product.price,
-      },
-    })
-  );
-
-  await documentClient.send(
-    new PutCommand({
-      TableName: STOCKS_TABLE_NAME,
-      Item: {
-        product_id: product.id,
-        count: product.count,
-      },
-    })
-  );
+  });
 
   return {
     statusCode: 201,
