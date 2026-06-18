@@ -5,6 +5,8 @@ import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as lambdaEventSources from 'aws-cdk-lib/aws-lambda-event-sources';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 
 export class ProductServiceStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -61,12 +63,24 @@ export class ProductServiceStack extends cdk.Stack {
       environment: {
         PRODUCTS_TABLE_NAME: productsTable.tableName,
         STOCKS_TABLE_NAME: stocksTable.tableName,
+        CREATE_PRODUCT_TOPIC_ARN: cdk.Stack.of(this).formatArn({
+          service: 'sns',
+          resource: 'createProductTopic',
+        }),
       },
     });
 
     const catalogItemsQueue = new sqs.Queue(this, 'CatalogItemsQueue', {
       queueName: 'catalogItemsQueue',
     });
+
+    const createProductTopic = new sns.Topic(this, 'CreateProductTopic', {
+      topicName: 'createProductTopic',
+    });
+
+    createProductTopic.addSubscription(
+      new subscriptions.EmailSubscription('fadeev1999nikolay@gmail.com')
+    );
 
     productsTable.grantReadData(getProductsListFn);
     stocksTable.grantReadData(getProductsListFn);
@@ -76,6 +90,7 @@ export class ProductServiceStack extends cdk.Stack {
     stocksTable.grantWriteData(createProductFn);
     productsTable.grantWriteData(catalogBatchProcessFn);
     stocksTable.grantWriteData(catalogBatchProcessFn);
+    createProductTopic.grantPublish(catalogBatchProcessFn);
 
     catalogBatchProcessFn.addEventSource(
       new lambdaEventSources.SqsEventSource(catalogItemsQueue, {

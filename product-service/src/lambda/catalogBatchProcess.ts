@@ -3,6 +3,10 @@ type CatalogBatchProcessEvent = {
 };
 
 import { createProductRecord } from '../lib/product';
+import { PublishCommand, SNSClient } from '@aws-sdk/client-sns';
+
+const snsClient = new SNSClient({});
+const createProductTopicArn = process.env.CREATE_PRODUCT_TOPIC_ARN;
 
 export const handler = async (event: CatalogBatchProcessEvent) => {
   const createdProducts = [];
@@ -28,6 +32,21 @@ export const handler = async (event: CatalogBatchProcessEvent) => {
 
     createdProducts.push(product);
   }
+
+  if (!createProductTopicArn) {
+    throw new Error('CREATE_PRODUCT_TOPIC_ARN is not configured');
+  }
+
+  await snsClient.send(
+    new PublishCommand({
+      TopicArn: createProductTopicArn,
+      Subject: 'Products created',
+      Message: JSON.stringify({
+        count: createdProducts.length,
+        products: createdProducts,
+      }),
+    })
+  );
 
   console.log('catalogBatchProcess created products', createdProducts);
 };
